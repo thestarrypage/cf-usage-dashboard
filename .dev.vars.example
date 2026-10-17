@@ -1,0 +1,12 @@
+# Copy to .dev.vars for local development (`npm run dev`). Never commit .dev.vars.
+# In production set these with `npx wrangler secret put <NAME>` (or `npm run setup`).
+
+# Cloudflare API token used to read analytics. Required permissions:
+#   Account > Account Analytics > Read
+#   Zone > Analytics > Read          (all zones)
+#   Zone > Zone > Read               (all zones)
+# Optional: Zone > Zone Settings > Read (Spectrum IPv4 / app counts)
+CF_API_TOKEN=
+
+# Password for the dashboard (HTTP Basic auth; any username works).
+DASHBOARD_PASSWORD=

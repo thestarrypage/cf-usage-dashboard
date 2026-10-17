@@ -1,0 +1,44 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "cf-usage-dashboard",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": [
+		"nodejs_compat",
+		// Lets alerts reach webhooks hosted on other Workers in the same account (e.g. a
+		// self-hosted ntfy on workers.dev); without it such fetches fail with error 1042 / HTTP 404.
+		"global_fetch_strictly_public"
+	],
+
+	// Dashboard UI. run_worker_first so the password check also covers the page itself.
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"run_worker_first": true
+	},
+
+	"vars": {
+		// Optional. Leave empty to use the account the API token belongs to (works when the
+		// token can see exactly one account). Set it if your token covers several accounts.
+		"ACCOUNT_ID": "4b4dd89ae17661da1cb0ae3b6d35ebe3"
+	},
+
+	// Secrets: set with `npx wrangler secret put <NAME>` (or in .dev.vars for local dev).
+	// See .dev.vars.example for what each one is.
+	"secrets": {
+		"required": ["CF_API_TOKEN", "DASHBOARD_PASSWORD"]
+	},
+
+	// Caps & alerts settings. Wrangler creates this namespace on the first deploy.
+	"kv_namespaces": [{ "binding": "CAPS","id": "4ee08aeaad614ef2be60809390508356" }],
+
+	// Hourly check of month-to-date usage against the caps set on the Caps & alerts page.
+	"triggers": {
+		"crons": ["5 * * * *"]
+	},
+
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	}
+}

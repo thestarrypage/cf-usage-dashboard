@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloudflare Usage</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6576; --line: #e3e6eb;
+    --accent: #f6821f; --accent-ink: #ffffff; --accent-soft: #fff1e5;
+    --warn-bg: #fff8e6; --warn-line: #f2d48b; --warn-ink: #7a5300;
+    --chip: #eef0f3; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1e26; --text: #e6e9ef; --muted: #9aa3b2; --line: #2a303b;
+      --accent: #f6821f; --accent-ink: #1a1e26; --accent-soft: #3a2614;
+      --warn-bg: #2d2412; --warn-line: #6b5420; --warn-ink: #f0cf7e;
+      --chip: #232833; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .brand { font-weight: 650; font-size: 16px; margin-right: auto; display: flex; align-items: center; gap: 8px; }
+  .brand small { font-weight: 400; color: var(--muted); font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  button, select, input[type=date] {
+    font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 10px; cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button:disabled { opacity: .55; cursor: default; }
+  .picker { position: relative; }
+  .range-btn { display: flex; gap: 10px; align-items: center; min-width: 260px; justify-content: space-between; }
+  .range-btn .tz { color: var(--muted); font-size: 12px; }
+  .pop {
+    position: absolute; top: calc(100% + 6px); right: 0; display: none; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.18); width: 560px; max-width: calc(100vw - 32px);
+  }
+  .pop.open { display: grid; grid-template-columns: 180px 1fr; }
+  .presets { border-right: 1px solid var(--line); padding: 6px; display: flex; flex-direction: column; }
+  .presets button { border: 0; text-align: left; padding: 8px 10px; background: transparent; }
+  .presets button:hover { background: var(--chip); }
+  .presets button.on { background: var(--accent-soft); font-weight: 600; }
+  .abs { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .abs h4 { margin: 0; font-size: 13px; }
+  .abs label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  .abs input { width: 100%; }
+  .abs .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .abs .err { color: #d4483b; font-size: 12px; min-height: 16px; }
+  .abs .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cal { border: 1px solid var(--line); border-radius: 8px; padding: 10px; user-select: none; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cal-head b { font-size: 14px; }
+  .cal-head button { padding: 2px 9px; font-size: 15px; line-height: 1.4; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px 0; text-align: center; }
+  .cal-grid .dow { font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+  .cal-grid button.day { border: 0; border-radius: 0; background: transparent; padding: 0; height: 32px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .cal-grid button.day:hover:not(:disabled) { background: var(--chip); }
+  .cal-grid button.day.out { color: var(--muted); opacity: .5; }
+  .cal-grid button.day:disabled { color: var(--muted); opacity: .35; cursor: default; }
+  .cal-grid button.day.in { background: var(--accent-soft); }
+  .cal-grid button.day.start, .cal-grid button.day.end { background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  .cal-grid button.day.start { border-radius: 6px 0 0 6px; }
+  .cal-grid button.day.end { border-radius: 0 6px 6px 0; }
+  .cal-grid button.day.start.end { border-radius: 6px; }
+  .cal-grid button.day.today { box-shadow: inset 0 0 0 1px var(--accent); }
+  .cal-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  .status { color: var(--muted); font-size: 12px; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .status b { color: var(--text); font-weight: 600; }
+  .group-title { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 600px), 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 14px 16px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 15px; }
+  .src { color: var(--muted); font-size: 11px; font-family: ui-monospace, Consolas, monospace; margin: 2px 0 12px; overflow-wrap: anywhere; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .kpi { background: var(--chip); border-radius: 8px; padding: 9px 11px; min-width: 0; }
+  .kpi .l { font-size: 12px; color: var(--muted); }
+  .kpi .v { font-size: 19px; font-weight: 650; margin-top: 2px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .kpi .h { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .kpi.na .v { color: var(--muted); font-weight: 500; font-size: 15px; }
+  .callout { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-top: 10px; }
+  .callout ul { margin: 4px 0 0; padding-left: 18px; }
+  .notes { color: var(--muted); font-size: 12px; margin: 10px 0 0; padding-left: 18px; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  .tablewrap { overflow-x: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  td.n, th.n { text-align: right; }
+  tr.total td { font-weight: 650; border-top: 2px solid var(--line); }
+  .empty { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .loading { padding: 60px 0; text-align: center; color: var(--muted); }
+  .spinner { width: 26px; height: 26px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 12px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fatal { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); padding: 14px; border-radius: 8px; }
+  /* ---- zone drill-down ---- */
+  :root { --series-1: #2a78d6; --series-2: #eb6834; --grid: #e9ebef; --hover-band: rgba(16,24,40,.05); }
+  @media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --grid: #2a303b; --hover-band: rgba(255,255,255,.05); } }
+  a.zlink { color: var(--text); font-weight: 600; text-decoration: none; border-bottom: 1px dashed var(--muted); }
+  a.zlink:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  a.zlink::after { content: " ›"; color: var(--muted); }
+  .zhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 4px 0 14px; }
+  .zhead h2 { margin: 0; font-size: 20px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--accent); }
+  .chip { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+  .zhead select { margin-left: auto; }
+  .kpi-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+  .chart-card { min-height: 290px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart .axis text { fill: var(--muted); font-size: 11px; }
+  .chart .gridline { stroke: var(--grid); stroke-width: 1; }
+  .chart .band { fill: transparent; }
+  .chart .band.on { fill: var(--hover-band); }
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+         box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 8px 10px; font-size: 12px; white-space: nowrap; display: none; z-index: 5; }
+  .tip b { display: block; margin-bottom: 4px; }
+  .tip .r { display: flex; justify-content: space-between; gap: 16px; }
+  .tip .r span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .badge { font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--chip); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+  .card .sub { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  /* ---- caps & alerts ---- */
+  :root { --st-good: #0ca30c; --st-warn: #fab219; --st-serious: #ec835a; --st-crit: #d03b3b; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  .capbar { margin-top: 6px; }
+  .capbar .track { position: relative; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .capbar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; }
+  .capbar .tick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--panel); }
+  .capbar .cap-l { font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; justify-content: space-between; gap: 6px; }
+  .lvl { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .lvl i { font-style: normal; }
+  .banner { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border: 1px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-ink);
+            border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+  .banner a { color: inherit; font-weight: 600; }
+  .slider-row { display: grid; grid-template-columns: 130px 1fr 54px; gap: 10px; align-items: center; margin: 10px 0; }
+  .slider-row label { color: var(--muted); font-size: 13px; }
+  .slider-row output { font-weight: 650; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .scale { position: relative; height: 10px; border-radius: 5px; margin: 14px 0 4px; overflow: hidden; display: flex; }
+  .scale span { height: 100%; }
+  .scale-l { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 12px; color: var(--muted); }
+  .field input[type=url], .field select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; width: 100%; }
+  .row-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .capin { display: flex; gap: 6px; align-items: center; }
+  .capin input { width: 120px; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; text-align: right; }
+  .capin select { padding: 5px 6px; }
+  td.usebar { min-width: 190px; }
+  td.usebar .capbar { margin-top: 0; }
+  .savebar { position: sticky; bottom: 0; z-index: 6; display: flex; gap: 12px; align-items: center; justify-content: flex-end; flex-wrap: wrap;
+             background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 14px; box-shadow: 0 -4px 16px rgba(0,0,0,.12); }
+  .savebar .msg { margin-right: auto; font-size: 13px; color: var(--muted); }
+  .savebar .msg.dirty { color: var(--warn-ink); font-weight: 600; }
+  .sec-row td { font-weight: 650; background: var(--chip); }
+  @media (max-width: 640px) {
+    .slider-row { grid-template-columns: 1fr 54px; }
+    .slider-row label { grid-column: 1 / -1; }
+    .zhead select { margin-left: 0; width: 100%; }
+    .pop.open { grid-template-columns: 1fr; }
+    .presets { border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; flex-wrap: wrap; }
+    .range-btn { min-width: 0; }
+    .picker { flex: 1 1 100%; }
+    .range-btn { width: 100%; }
+    .pop { left: 0; right: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><span class="dot"></span>Cloudflare usage <small id="acct"></small></div>
+    <div class="picker">
+      <button class="range-btn" id="rangeBtn" aria-haspopup="dialog" aria-expanded="false">
+        <span id="rangeLabel">Select dates</span><span class="tz">UTC ▾</span>
+      </button>
+      <div class="pop" id="pop" role="dialog" aria-label="Date range">
+        <div class="presets" id="presets"></div>
+        <div class="abs">
+          <h4>Absolute date range (UTC)</h4>
+          <div class="dates">
+            <label>From <input type="date" id="fromIn"></label>
+            <label>To <input type="date" id="toIn"></label>
+          </div>
+          <div class="cal" id="cal" aria-label="Calendar"></div>
+          <div class="err" id="rangeErr"></div>
+          <div class="row">
+            <button id="cancelBtn">Cancel</button>
+            <button class="primary" id="applyBtn">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <select id="zoneSel" aria-label="Zones">
+      <option value="enterprise">Enterprise zones</option>
+      <option value="all">All zones</option>
+    </select>
+    <button id="ztBtn" title="Zero Trust (Cloudflare One) usage">Zero Trust</button>
+    <button id="capsBtn" title="Monthly caps and alert thresholds">Caps &amp; alerts</button>
+    <button id="refreshBtn" title="Re-query Cloudflare (skip cache)">Refresh</button>
+    <button id="csvBtn" disabled>Download CSV</button>
+  </div>
+</header>
+<main>
+  <p class="status" id="status"></p>
+  <div id="content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const DAY = 86400000;
+  const iso = (d) => new Date(d).toISOString().slice(0, 10);
+  const todayUtc = () => iso(Date.now());
+  const startOfMonth = (y, m) => iso(Date.UTC(y, m, 1));
+  const endOfMonth = (y, m) => iso(Date.UTC(y, m + 1, 0));
+
+  const presets = [
+    { id: "7d", label: "Last 7 days", range: () => [iso(Date.now() - 6 * DAY), todayUtc()] },
+    { id: "14d", label: "Last 14 days", range: () => [iso(Date.now() - 13 * DAY), todayUtc()] },
+    { id: "30d", label: "Last 30 days", range: () => [iso(Date.now() - 29 * DAY), todayUtc()] },
+    { id: "mtd", label: "This month", range: () => { const n = new Date(); return [startOfMonth(n.getUTCFullYear(), n.getUTCMonth()), todayUtc()]; } },
+    { id: "lm", label: "Last month", range: () => { const n = new Date(); return [startOfMonth(n.getUTCFullYear(), n.getUTCMonth() - 1), endOfMonth(n.getUTCFullYear(), n.getUTCMonth() - 1)]; } },
+    { id: "lm2", label: "2 months ago", range: () => { const n = new Date(); return [startOfMonth(n.getUTCFullYear(), n.getUTCMonth() - 2), endOfMonth(n.getUTCFullYear(), n.getUTCMonth() - 2)]; } },
+    { id: "90d", label: "Last 90 days", range: () => [iso(Date.now() - 89 * DAY), todayUtc()] },
+  ];
+
+  const params = new URLSearchParams(location.search);
+  function pageFrom(view) {
+    return view === "caps" ? "caps" : view === "zerotrust" ? "zt" : null;
+  }
+  const lastMonth = presets.find((p) => p.id === "lm").range();
+  const state = {
+    from: params.get("from") || lastMonth[0],
+    to: params.get("to") || lastMonth[1],
+    zones: params.get("zones") === "all" ? "all" : "enterprise",
+    zone: params.get("zone") || null,
+    page: pageFrom(params.get("view")),
+    view: null,
+    data: null,
+    config: null,
+  };
+  $("zoneSel").value = state.zones;
+
+  // ---- date picker -------------------------------------------------------
+  const pop = $("pop");
+  const fmtDay = (s) => new Date(s + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  function rangeLabel() {
+    const p = presets.find((x) => { const [f, t] = x.range(); return f === state.from && t === state.to; });
+    return p ? `${p.label}  ·  ${fmtDay(state.from)} – ${fmtDay(state.to)}` : `${fmtDay(state.from)} – ${fmtDay(state.to)}`;
+  }
+  function renderPresets() {
+    $("presets").innerHTML = "";
+    for (const p of presets) {
+      const b = document.createElement("button");
+      const [f, t] = p.range();
+      b.textContent = p.label + (f === $("fromIn").value && t === $("toIn").value ? "  ✓" : "");
+      b.className = f === $("fromIn").value && t === $("toIn").value ? "on" : "";
+      b.onclick = () => { $("fromIn").value = f; $("toIn").value = t; apply(); };
+      $("presets").appendChild(b);
+    }
+  }
+  function openPop(open) {
+    pop.classList.toggle("open", open);
+    $("rangeBtn").setAttribute("aria-expanded", String(open));
+    if (open) {
+      $("fromIn").value = state.from; $("toIn").value = state.to;
+      $("fromIn").max = $("toIn").max = todayUtc();
+      $("rangeErr").textContent = "";
+      renderPresets();
+      cal.month = monthOf(state.to);
+      renderCal();
+    }
+  }
+  function apply() {
+    if ($("fromIn").value && !$("toIn").value) $("toIn").value = $("fromIn").value;
+    const f = $("fromIn").value, t = $("toIn").value;
+    if (!f || !t) return void ($("rangeErr").textContent = "Pick both dates.");
+    if (f > t) return void ($("rangeErr").textContent = "From must be on or before To.");
+    if (t > todayUtc()) return void ($("rangeErr").textContent = "To cannot be in the future.");
+    if ((Date.parse(t) - Date.parse(f)) / DAY + 1 > 366) return void ($("rangeErr").textContent = "Maximum range is 366 days.");
+    state.from = f; state.to = t;
+    openPop(false);
+    load(false, false);
+  }
+  $("rangeBtn").onclick = (e) => { e.stopPropagation(); openPop(!pop.classList.contains("open")); };
+  pop.onclick = (e) => e.stopPropagation();
+  document.addEventListener("click", () => openPop(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") openPop(false); });
+  $("fromIn").oninput = $("toIn").oninput = () => {
+    renderPresets();
+    const v = $("toIn").value || $("fromIn").value;
+    if (v) cal.month = monthOf(v);
+    renderCal();
+  };
+
+  // ---- calendar grid (inside the date picker) -------------------------------
+  const cal = { month: null, hover: null };
+  const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  function monthOf(isoDay) { return isoDay.slice(0, 7) + "-01"; }
+  function addMonths(first, n) {
+    const d = new Date(first + "T00:00:00Z");
+    return iso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  }
+  function renderCal() {
+    const el = $("cal");
+    if (!cal.month) cal.month = monthOf(todayUtc());
+    const first = new Date(cal.month + "T00:00:00Z");
+    const title = first.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+    const start = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1 - first.getUTCDay());
+    const today = todayUtc();
+    let cells = DOW.map((d) => `<div class="dow">${d}</div>`).join("");
+    for (let i = 0; i < 42; i++) {
+      const day = iso(start + i * DAY);
+      const out = day.slice(0, 7) !== cal.month.slice(0, 7) ? " out" : "";
+      const now = day === today ? " today" : "";
+      cells += `<button type="button" class="day${out}${now}" data-day="${day}" ${day > today ? "disabled" : ""} aria-label="${day}">${Number(day.slice(8))}</button>`;
+    }
+    const nextDisabled = addMonths(cal.month, 1) > today ? "disabled" : "";
+    el.innerHTML = `<div class="cal-head"><button type="button" data-nav="-1" aria-label="Previous month">‹</button><b>${esc(title)}</b><button type="button" data-nav="1" aria-label="Next month" ${nextDisabled}>›</button></div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cal-hint"></div>`;
+    paintCal();
+  }
+  /** Marks the selected range on the existing day buttons (no re-render, so clicks are never lost). */
+  function paintCal() {
+    let from = $("fromIn").value, to = $("toIn").value;
+    // While picking the end date, preview the range under the pointer.
+    if (from && !to && cal.hover) to = cal.hover;
+    if (from && to && to < from) [from, to] = [to, from];
+    for (const b of $("cal").querySelectorAll("button[data-day]")) {
+      const day = b.dataset.day;
+      b.classList.toggle("in", !!(from && to && day > from && day < to));
+      b.classList.toggle("start", day === from);
+      b.classList.toggle("end", day === (to || from));
+    }
+    const hint = $("cal").querySelector(".cal-hint");
+    if (hint) hint.textContent = $("fromIn").value && !$("toIn").value ? "Now pick the end date." : "Click a start date, then an end date.";
+  }
+  $("cal").addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-nav]");
+    if (nav) { cal.month = addMonths(cal.month, Number(nav.dataset.nav)); renderCal(); return; }
+    const b = e.target.closest("button[data-day]");
+    if (!b || b.disabled) return;
+    const day = b.dataset.day, from = $("fromIn").value, to = $("toIn").value;
+    if (!from || to) { $("fromIn").value = day; $("toIn").value = ""; }
+    else if (day < from) { $("fromIn").value = day; $("toIn").value = from; }
+    else { $("toIn").value = day; }
+    cal.hover = null;
+    $("rangeErr").textContent = "";
+    renderPresets();
+    paintCal();
+  });
+  $("cal").addEventListener("mouseover", (e) => {
+    const b = e.target.closest("button[data-day]");
+    if (!b || !$("fromIn").value || $("toIn").value || cal.hover === b.dataset.day) return;
+    cal.hover = b.dataset.day;
+    paintCal();
+  });
+  $("applyBtn").onclick = apply;
+  $("cancelBtn").onclick = () => openPop(false);
+  $("zoneSel").onchange = () => { state.zones = $("zoneSel").value; load(false, false); };
+  $("refreshBtn").onclick = () => load(true, false);
+  $("csvBtn").onclick = downloadCsv;
+
+  // ---- formatting --------------------------------------------------------
+  const nf = new Intl.NumberFormat();
+  const nf2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+  function fmtBytes(b) {
+    if (!b) return "0 B";
+    const u = ["B", "KB", "MB", "GB", "TB", "PB"];
+    const i = Math.min(Math.floor(Math.log10(Math.abs(b)) / 3), u.length - 1);
+    return `${nf2.format(b / 10 ** (3 * i))} ${u[i]}`;
+  }
+  function fmtDuration(ms) {
+    if (ms < 1000) return `${nf2.format(ms)} ms`;
+    const s = ms / 1000;
+    if (s < 120) return `${nf2.format(s)} s`;
+    if (s < 7200) return `${nf2.format(s / 60)} min`;
+    return `${nf2.format(s / 3600)} h`;
+  }
+  function fmt(v, unit) {
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "string") return v;
+    switch (unit) {
+      case "bytes": return fmtBytes(v);
+      case "percent": return `${nf2.format(v)}%`;
+      case "ms": return fmtDuration(v);
+      case "seconds": return fmtDuration(v * 1000);
+      case "gbSeconds": return `${nf2.format(v)} GB-s`;
+      case "gibSeconds": return `${nf2.format(v)} GiB-s`;
+      case "count": return nf.format(Math.round(v));
+      default: return nf2.format(v);
+    }
+  }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ---- loading & rendering ----------------------------------------------
+  const TIMEOUT_MS = 120000;
+  function errText(err) {
+    return err && err.name === "TimeoutError"
+      ? "Cloudflare took more than 2 minutes to answer. Try Refresh, or pick a shorter date range."
+      : (err && err.message) || String(err);
+  }
+  let inflight = 0;
+  async function load(fresh, push) {
+    const ticket = ++inflight;
+    $("rangeLabel").textContent = rangeLabel();
+    if (state.page === "caps") return loadCaps(ticket, fresh, push);
+    $("capsBtn").classList.remove("on");
+    if (state.page === "zt") return loadZt(ticket, fresh, push);
+    $("ztBtn").classList.remove("on");
+    const q = new URLSearchParams({ from: state.from, to: state.to, zones: state.zones });
+    if (state.zone) q.set("zone", state.zone);
+    history[push ? "pushState" : "replaceState"](null, "", "?" + q);
+
+    const api = state.zone
+      ? new URLSearchParams({ id: state.zone, from: state.from, to: state.to })
+      : new URLSearchParams({ from: state.from, to: state.to, zones: state.zones });
+    if (fresh) api.set("fresh", "1");
+    $("content").innerHTML = `<div class="loading"><div class="spinner"></div>Querying Cloudflare for ${esc(fmtDay(state.from))} – ${esc(fmtDay(state.to))}…</div>`;
+    $("status").textContent = "";
+    $("csvBtn").disabled = true;
+    $("refreshBtn").disabled = true;
+    $("zoneSel").hidden = !!state.zone;
+    try {
+      // location.origin never carries user:pass, so this works even if the page URL did.
+      const [res] = await Promise.all([
+        fetch(`${location.origin}/api/${state.zone ? "zone" : "usage"}?${api}`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) }),
+        ensureConfig(false),
+      ]);
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (ticket !== inflight) return;
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      state.data = body;
+      state.view = state.zone ? "zone" : "overview";
+      (state.zone ? renderZone : render)(body, res.headers.get("X-Cache"));
+      $("csvBtn").disabled = false;
+    } catch (err) {
+      if (ticket !== inflight) return;
+      $("content").innerHTML = `<div class="fatal"><b>Could not load usage.</b><br>${esc(errText(err))}</div>`;
+    } finally {
+      if (ticket === inflight) $("refreshBtn").disabled = false;
+    }
+  }
+
+  function openZone(id) {
+    state.zone = id || null;
+    state.page = null;
+    window.scrollTo(0, 0);
+    load(false, true);
+  }
+  // Zone links (overview tables, back link) are handled in-page so Back/Forward work.
+  $("content").addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-zone]");
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    openZone(a.dataset.zone);
+  });
+  $("content").addEventListener("change", (e) => {
+    if (e.target.id === "zoneSwitch") openZone(e.target.value);
+  });
+  $("content").addEventListener("click", (e) => {
+    if (e.target.closest("a[data-caps]")) { e.preventDefault(); openCaps(); }
+  });
+  window.addEventListener("popstate", () => {
+    const p = new URLSearchParams(location.search);
+    state.from = p.get("from") || state.from;
+    state.to = p.get("to") || state.to;
+    state.zones = p.get("zones") === "all" ? "all" : "enterprise";
+    state.zone = p.get("zone") || null;
+    state.page = pageFrom(p.get("view"));
+    $("zoneSel").value = state.zones;
+    load(false, false);
+  });
+
+  function zoneHref(id) {
+    const q = new URLSearchParams({ from: state.from, to: state.to, zones: state.zones });
+    if (id) q.set("zone", id);
+    return "?" + q;
+  }
+
+  function statusLine(d, cacheState, extra) {
+    $("acct").textContent = d.accountId;
+    $("status").innerHTML =
+      `<span><b>${esc(fmtDay(d.range.from))} – ${esc(fmtDay(d.range.to))}</b> (${d.range.days} days, UTC)</span>` + extra +
+      `<span>Generated ${esc(new Date(d.generatedAt).toLocaleString())}${cacheState === "HIT" ? " · cached" : ""}</span>`;
+  }
+
+  function render(d, cacheState) {
+    const zones = d.zones.map((z) => z.name).join(", ") || "none";
+    statusLine(d, cacheState, `<span>Zones: <b>${esc(zones)}</b></span>`);
+    const groups = [...new Set(d.sections.map((s) => s.group))];
+    const hot = state.config ? overCap(d.sections, state.config) : [];
+    const banner = hot.length
+      ? `<div class="banner"><b>${LEVELS[hot[0].level].icon} ${hot.length} metric${hot.length > 1 ? "s are" : " is"} at or above ${state.config.warning}% of the monthly cap in this range:</b>
+          <span>${hot.slice(0, 4).map((h) => `${esc(h.s.title)} – ${esc(h.m.label)} ${esc(nf2.format(h.pct))}%`).join(" · ")}${hot.length > 4 ? " …" : ""}</span>
+          <a href="?view=caps" data-caps>Review caps</a></div>`
+      : "";
+    $("content").innerHTML = banner + groups.map((g) => `
+      <div class="group-title">${esc(g)}</div>
+      <div class="grid">${d.sections.filter((s) => s.group === g).map(card).join("")}</div>
+    `).join("");
+  }
+
+  function kpiHtml(m) {
+    return `
+      <div class="kpi${m.value === null ? " na" : ""}">
+        <div class="l">${esc(m.label)}</div>
+        <div class="v">${esc(m.value === null ? "Not available" : fmt(m.value, m.unit))}</div>
+        ${m.hint ? `<div class="h">${esc(m.hint)}</div>` : ""}
+        ${capFor(m) ? capBarHtml(m.value, capFor(m), state.config.warning, state.config.critical, "of monthly cap") : ""}
+      </div>`;
+  }
+  function capFor(m) {
+    return state.view === "overview" && m.capKey && m.value !== null && state.config ? state.config.caps[m.capKey] || 0 : 0;
+  }
+
+  function errorsHtml(errors) {
+    return errors.length
+      ? `<div class="callout"><b>${errors.length} part${errors.length > 1 ? "s" : ""} of this couldn't be loaded</b><ul>${errors.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join("")}${errors.length > 6 ? `<li>…and ${errors.length - 6} more</li>` : ""}</ul></div>`
+      : "";
+  }
+
+  function tableHtml(t) {
+    if (!t.rows.length) return `<div class="empty">No rows.</div>`;
+    const first = t.columns[0].key;
+    const cell = (r, c) => {
+      if (c.key === first && r.zoneId) return `<a class="zlink" data-zone="${esc(r.zoneId)}" href="${esc(zoneHref(r.zoneId))}" title="Open ${esc(r[first])}">${esc(r[first])}</a>`;
+      return esc(c.unit ? fmt(r[c.key], c.unit) : (r[c.key] ?? "—"));
+    };
+    return `<div class="tablewrap"><table><thead><tr>${t.columns.map((c) => `<th class="${c.unit ? "n" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${
+      t.rows.map((r) => `<tr class="${r[first] === "Total" ? "total" : ""}">${t.columns.map((c) => `<td class="${c.unit ? "n" : ""}">${cell(r, c)}</td>`).join("")}</tr>`).join("")
+    }</tbody></table></div>`;
+  }
+
+  function card(s) {
+    const notes = s.notes.length ? `<ul class="notes">${s.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : "";
+    const tables = s.tables.map((t, i) => {
+      const open = s.id === "cdn" || s.id === "good-requests" || s.id === "dns" || s.id === "spectrum" || (t.rows.length > 0 && t.rows.length <= 6 && i === 0);
+      const hint = t.rows.some((r) => r.zoneId) ? ` <span class="badge">click a zone for detail</span>` : "";
+      return `<details${open ? " open" : ""}><summary>${esc(t.title)}${hint}</summary>${tableHtml(t)}</details>`;
+    }).join("");
+    return `<section class="card"><h3>${esc(s.title)}</h3><div class="src">${esc(s.source)}</div><div class="kpis">${s.metrics.map(kpiHtml).join("")}</div>${errorsHtml(s.errors)}${tables}${notes}</section>`;
+  }
+
+  // ---- caps & alerts -------------------------------------------------------
+  const LEVELS = {
+    ok: { label: "OK", icon: "●", color: "var(--st-good)" },
+    warning: { label: "Warning", icon: "▲", color: "var(--st-warn)" },
+    critical: { label: "Critical", icon: "◆", color: "var(--st-serious)" },
+    exceeded: { label: "Over cap", icon: "⛔", color: "var(--st-crit)" },
+  };
+  // Units offered when typing a cap, per metric unit: [label, multiplier to the base unit].
+  const CAP_UNITS = {
+    bytes: [["MB", 1e6], ["GB", 1e9], ["TB", 1e12]],
+    count: [["", 1], ["thousand", 1e3], ["million", 1e6], ["billion", 1e9]],
+    ms: [["ms", 1], ["million ms", 1e6]],
+    seconds: [["seconds", 1], ["hours", 3600]],
+    gbSeconds: [["GB-s", 1], ["million GB-s", 1e6]],
+    gibSeconds: [["GiB-s", 1], ["million GiB-s", 1e6]],
+  };
+
+  async function ensureConfig(force) {
+    if (state.config && !force) return state.config;
+    try {
+      const res = await fetch(`${location.origin}/api/config`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      state.config = res.ok ? await res.json() : null;
+    } catch {
+      state.config = null;
+    }
+    if (!state.config) state.config = { caps: {}, warning: 80, critical: 90, webhookUrl: "", zoneFilter: "enterprise", kvReady: false };
+    return state.config;
+  }
+
+  function levelFor(pct, warning, critical) {
+    return pct >= 100 ? "exceeded" : pct >= critical ? "critical" : pct >= warning ? "warning" : "ok";
+  }
+
+  function capBarHtml(value, cap, warning, critical, caption) {
+    const pct = cap > 0 ? (value / cap) * 100 : 0;
+    const lv = LEVELS[levelFor(pct, warning, critical)];
+    return `<div class="capbar" title="${esc(fmt(pct, "percent"))} of cap">
+      <div class="track"><div class="fill" style="width:${Math.min(100, pct)}%;background:${lv.color}"></div>
+        <div class="tick" style="left:${warning}%"></div><div class="tick" style="left:${critical}%"></div></div>
+      <div class="cap-l"><span class="lvl" style="color:var(--text)"><i style="color:${lv.color}">${lv.icon}</i>${esc(nf2.format(pct))}% ${esc(caption)}</span><span>${esc(lv.label)}</span></div>
+    </div>`;
+  }
+
+  /** Metrics with a cap whose usage in `sections` is at or above the warning threshold. */
+  function overCap(sections, cfg) {
+    const out = [];
+    for (const s of sections) for (const m of s.metrics) {
+      const cap = m.capKey && cfg.caps[m.capKey];
+      if (!cap || m.value === null) continue;
+      const pct = (m.value / cap) * 100;
+      if (pct >= cfg.warning) out.push({ s, m, pct, level: levelFor(pct, cfg.warning, cfg.critical) });
+    }
+    return out.sort((a, b) => b.pct - a.pct);
+  }
+
+  function openCaps() {
+    state.page = "caps";
+    state.zone = null;
+    window.scrollTo(0, 0);
+    load(false, true);
+  }
+  $("capsBtn").onclick = () => (state.page === "caps" ? closeCaps() : openCaps());
+  function closeCaps() {
+    if (state.capsDirty && !confirm("Leave without saving your cap changes?")) return;
+    state.page = null;
+    load(false, true);
+  }
+
+  async function loadCaps(ticket, fresh, push) {
+    const mtd = { from: todayUtc().slice(0, 8) + "01", to: todayUtc() };
+    const q = new URLSearchParams({ view: "caps", from: state.from, to: state.to, zones: state.zones });
+    history[push ? "pushState" : "replaceState"](null, "", "?" + q);
+    $("capsBtn").classList.add("on");
+    $("ztBtn").classList.remove("on");
+    $("zoneSel").hidden = true;
+    $("csvBtn").disabled = true;
+    $("refreshBtn").disabled = true;
+    $("status").textContent = "";
+    $("content").innerHTML = `<div class="loading"><div class="spinner"></div>Loading caps and this month's usage…</div>`;
+    try {
+      const cfg = await ensureConfig(true);
+      const api = new URLSearchParams({ from: mtd.from, to: mtd.to, zones: cfg.zoneFilter || "enterprise" });
+      if (fresh) api.set("fresh", "1");
+      const res = await fetch(`${location.origin}/api/usage?${api}`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (ticket !== inflight) return;
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      state.capsUsage = body;
+      // Working copy the page edits; saved with the Save button.
+      state.draft = { caps: { ...cfg.caps }, warning: cfg.warning, critical: cfg.critical, webhookUrl: cfg.webhookUrl || "", zoneFilter: cfg.zoneFilter || "enterprise" };
+      state.capsDirty = false;
+      renderCaps();
+    } catch (err) {
+      if (ticket !== inflight) return;
+      $("content").innerHTML = `<div class="fatal"><b>Could not load caps.</b><br>${esc(errText(err))}</div>`;
+    } finally {
+      if (ticket === inflight) $("refreshBtn").disabled = false;
+    }
+  }
+
+  function pickUnit(unit, base) {
+    const units = CAP_UNITS[unit] || [["", 1]];
+    if (!base) return units[Math.min(1, units.length - 1)];
+    let best = units[0];
+    for (const u of units) if (base / u[1] >= 1) best = u;
+    return best;
+  }
+
+  function renderCaps() {
+    const cfg = state.config, d = state.draft, usage = state.capsUsage;
+    const st = cfg.alertState || {};
+    statusLine(usage, null, `<span>Caps are monthly; usage shown is <b>this month so far</b> (${esc(cfg.zoneFilter === "all" ? "all zones" : "Enterprise zones")})</span>`);
+    const rows = [];
+    for (const s of usage.sections) {
+      const ms = s.metrics.filter((m) => m.capKey);
+      if (!ms.length) continue;
+      rows.push(`<tr class="sec-row"><td colspan="4">${esc(s.title)}</td></tr>`);
+      for (const m of ms) {
+        const base = d.caps[m.capKey];
+        const [uLabel, mult] = pickUnit(m.unit, base);
+        const units = CAP_UNITS[m.unit] || [["", 1]];
+        rows.push(`<tr data-key="${esc(m.capKey)}" data-unit="${esc(m.unit)}" data-value="${m.value ?? ""}">
+          <td>${esc(m.label)}</td>
+          <td class="n">${esc(m.value === null ? "Not available" : fmt(m.value, m.unit))}</td>
+          <td><div class="capin">
+            <input type="number" min="0" step="any" inputmode="decimal" placeholder="No cap" aria-label="Monthly cap for ${esc(s.title)} ${esc(m.label)}"
+              value="${base ? +(base / mult).toPrecision(12) : ""}" ${cfg.kvReady ? "" : "disabled"}>
+            ${units.length > 1 ? `<select aria-label="Cap unit" ${cfg.kvReady ? "" : "disabled"}>${units.map(([l, x]) => `<option value="${x}"${x === mult ? " selected" : ""}>${esc(l || "×1")}</option>`).join("")}</select>` : `<span class="muted">${esc(units[0][0])}</span>`}
+          </div></td>
+          <td class="usebar"></td>
+        </tr>`);
+      }
+    }
+    const lastRun = st.lastRun ? new Date(st.lastRun).toLocaleString() : "not yet";
+    const lastSent = st.lastSent ? new Date(st.lastSent).toLocaleString() : "none this month";
+
+    $("content").innerHTML = `
+      <div class="zhead"><a class="back" href="#" id="capsBack">← Back to usage</a><h2>Caps &amp; alerts</h2></div>
+      ${cfg.kvReady ? "" : `<div class="fatal" style="margin-bottom:14px"><b>Caps can't be saved yet.</b><br>${esc(cfg.kvMessage || "KV namespace missing.")}</div>`}
+      <div class="kpi-groups">
+        <section class="card">
+          <h3>Alert thresholds</h3>
+          <div class="sub">You're alerted when a product's usage this month reaches these percentages of its cap, and again if it goes over the cap.</div>
+          <div class="slider-row"><label for="warnIn">▲ Warning at</label><input type="range" id="warnIn" min="10" max="99" step="1" value="${d.warning}" ${cfg.kvReady ? "" : "disabled"}><output id="warnOut">${d.warning}%</output></div>
+          <div class="slider-row"><label for="critIn">◆ Critical at</label><input type="range" id="critIn" min="11" max="100" step="1" value="${d.critical}" ${cfg.kvReady ? "" : "disabled"}><output id="critOut">${d.critical}%</output></div>
+          <div class="scale" id="scale"></div>
+          <div class="scale-l"><span>0%</span><span>100% = cap</span></div>
+        </section>
+        <section class="card">
+          <h3>Notifications</h3>
+          <div class="sub">Checked every hour. One message per product per level each month.</div>
+          <label class="field">Webhook URL (Slack, Discord, Microsoft Teams, Google Chat, or any HTTPS endpoint)
+            <input type="url" id="hookIn" placeholder="https://hooks.slack.com/services/…" value="${esc(d.webhookUrl)}" ${cfg.kvReady ? "" : "disabled"}></label>
+          <label class="field">Zones counted toward zone caps
+            <select id="capZones" ${cfg.kvReady ? "" : "disabled"}><option value="enterprise"${d.zoneFilter !== "all" ? " selected" : ""}>Enterprise zones</option><option value="all"${d.zoneFilter === "all" ? " selected" : ""}>All zones</option></select></label>
+          <div class="row-btns">
+            <button id="testBtn" ${cfg.kvReady ? "" : "disabled"}>Send test alert</button>
+            <button id="runBtn" ${cfg.kvReady ? "" : "disabled"}>Check caps now</button>
+          </div>
+          <p class="muted" id="alertInfo">Last check: ${esc(lastRun)} · Last alert sent: ${esc(lastSent)}${st.lastError ? ` · <span style="color:var(--st-crit)">Last error: ${esc(st.lastError)}</span>` : ""}</p>
+        </section>
+      </div>
+      <div class="group-title">Monthly caps</div>
+      <section class="card">
+        <div class="sub">Leave a cap empty for no limit. Usage is ${esc(fmtDay(usage.range.from))} – ${esc(fmtDay(usage.range.to))} (UTC).</div>
+        <div class="tablewrap"><table id="capsTable"><thead><tr><th>Metric</th><th class="n">This month so far</th><th>Monthly cap</th><th>Used</th></tr></thead>
+        <tbody>${rows.join("")}</tbody></table></div>
+      </section>
+      <div class="savebar"><span class="msg" id="saveMsg">${cfg.updatedAt ? `Saved ${esc(new Date(cfg.updatedAt).toLocaleString())}` : "No caps saved yet"}</span>
+        <button id="discardBtn">Discard changes</button><button class="primary" id="saveBtn" ${cfg.kvReady ? "" : "disabled"}>Save caps &amp; alerts</button></div>
+    `;
+
+    const markDirty = () => { state.capsDirty = true; $("saveMsg").textContent = "Unsaved changes"; $("saveMsg").className = "msg dirty"; };
+    const syncSliders = (moved) => {
+      let w = +$("warnIn").value, c = +$("critIn").value;
+      if (w >= c) { if (moved === "warn") c = Math.min(100, w + 1); else w = Math.max(10, c - 1); }
+      $("warnIn").value = w; $("critIn").value = c;
+      d.warning = w; d.critical = c;
+      $("warnOut").textContent = w + "%"; $("critOut").textContent = c + "%";
+      $("scale").innerHTML = `<span style="width:${w}%;background:var(--st-good)"></span><span style="width:${c - w}%;background:var(--st-warn)"></span><span style="width:${100 - c}%;background:var(--st-serious)"></span>`;
+      updateBars();
+    };
+    const readRow = (tr) => {
+      const raw = tr.querySelector("input").value.trim();
+      const sel = tr.querySelector("select");
+      const mult = sel ? +sel.value : (CAP_UNITS[tr.dataset.unit] || [["", 1]])[0][1];
+      const n = raw === "" ? null : Number(raw) * mult;
+      if (n === null || !Number.isFinite(n) || n <= 0) delete d.caps[tr.dataset.key];
+      else d.caps[tr.dataset.key] = n;
+    };
+    function updateBars() {
+      document.querySelectorAll("#capsTable tr[data-key]").forEach((tr) => {
+        const cap = d.caps[tr.dataset.key];
+        const v = tr.dataset.value === "" ? null : +tr.dataset.value;
+        tr.querySelector(".usebar").innerHTML = cap && v !== null ? capBarHtml(v, cap, d.warning, d.critical, "of cap") : `<span class="muted">No cap</span>`;
+      });
+    }
+
+    $("warnIn").oninput = () => { syncSliders("warn"); markDirty(); };
+    $("critIn").oninput = () => { syncSliders("crit"); markDirty(); };
+    $("hookIn").oninput = () => { d.webhookUrl = $("hookIn").value.trim(); markDirty(); };
+    $("capZones").onchange = () => { d.zoneFilter = $("capZones").value; markDirty(); };
+    $("capsTable").addEventListener("input", (e) => { const tr = e.target.closest("tr[data-key]"); if (tr) { readRow(tr); updateBars(); markDirty(); } });
+    $("capsTable").addEventListener("change", (e) => { const tr = e.target.closest("tr[data-key]"); if (tr) { readRow(tr); updateBars(); markDirty(); } });
+    $("capsBack").onclick = (e) => { e.preventDefault(); closeCaps(); };
+    $("discardBtn").onclick = () => { state.capsDirty = false; load(false, false); };
+    $("saveBtn").onclick = saveCaps;
+    $("testBtn").onclick = () => alertAction("test");
+    $("runBtn").onclick = () => alertAction("run");
+    syncSliders("warn");
+  }
+
+  async function saveCaps() {
+    const btn = $("saveBtn");
+    btn.disabled = true;
+    $("saveMsg").textContent = "Saving…"; $("saveMsg").className = "msg";
+    try {
+      const res = await fetch(`${location.origin}/api/config`, {
+        method: "PUT", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(state.draft),
+      });
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      const zonesChanged = (state.config.zoneFilter || "enterprise") !== body.zoneFilter;
+      state.config = body;
+      state.capsDirty = false;
+      if (zonesChanged) return load(false, false); // usage depends on the zone filter
+      $("saveMsg").textContent = `Saved ${new Date(body.updatedAt).toLocaleString()}`;
+    } catch (err) {
+      $("saveMsg").textContent = `Not saved: ${errText(err)}`; $("saveMsg").className = "msg dirty";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function alertAction(kind) {
+    const info = $("alertInfo");
+    if (state.capsDirty) { info.textContent = "Save your changes first, so the check uses them."; return; }
+    info.textContent = kind === "test" ? "Sending test alert…" : "Checking this month's usage against your caps…";
+    try {
+      const res = await fetch(`${location.origin}/api/alerts/${kind}`, { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      if (kind === "test") info.textContent = "Test alert sent. Check your channel.";
+      else {
+        const st = body.alertState || {};
+        info.textContent = `Checked ${body.checked} capped metric${body.checked === 1 ? "" : "s"}; ${body.sent.length} new alert${body.sent.length === 1 ? "" : "s"} sent.` +
+          (st.lastError ? ` Last error: ${st.lastError}` : "") + (!state.config.webhookUrl ? " (No webhook set, so nothing was sent.)" : "");
+      }
+    } catch (err) {
+      info.textContent = `Failed: ${errText(err)}`;
+    }
+  }
+
+  window.addEventListener("beforeunload", (e) => { if (state.page === "caps" && state.capsDirty) e.preventDefault(); });
+
+  // ---- Zero Trust page -------------------------------------------------------
+  function openZt() {
+    if (state.page === "caps" && state.capsDirty && !confirm("Leave without saving your cap changes?")) return;
+    state.page = "zt";
+    state.zone = null;
+    window.scrollTo(0, 0);
+    load(false, true);
+  }
+  $("ztBtn").onclick = () => {
+    if (state.page === "zt") { state.page = null; load(false, true); } else openZt();
+  };
+
+  async function loadZt(ticket, fresh, push) {
+    const q = new URLSearchParams({ view: "zerotrust", from: state.from, to: state.to, zones: state.zones });
+    history[push ? "pushState" : "replaceState"](null, "", "?" + q);
+    $("ztBtn").classList.add("on");
+    $("capsBtn").classList.remove("on");
+    $("zoneSel").hidden = true;
+    $("csvBtn").disabled = true;
+    $("refreshBtn").disabled = true;
+    $("status").textContent = "";
+    $("content").innerHTML = `<div class="loading"><div class="spinner"></div>Querying Zero Trust analytics for ${esc(fmtDay(state.from))} – ${esc(fmtDay(state.to))}…</div>`;
+    try {
+      const api = new URLSearchParams({ from: state.from, to: state.to });
+      if (fresh) api.set("fresh", "1");
+      const res = await fetch(`${location.origin}/api/zerotrust?${api}`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (ticket !== inflight) return;
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      state.data = body;
+      state.view = "zt";
+      renderZt(body, res.headers.get("X-Cache"));
+      $("csvBtn").disabled = false;
+    } catch (err) {
+      if (ticket !== inflight) return;
+      $("content").innerHTML = `<div class="fatal"><b>Could not load Zero Trust usage.</b><br>${esc(errText(err))}</div>`;
+    } finally {
+      if (ticket === inflight) $("refreshBtn").disabled = false;
+    }
+  }
+
+  function renderZt(d, cacheState) {
+    const products = d.sections.filter((x) => x.id !== "zt-other");
+    const active = products.filter((x) => !x.notes.includes("No activity in this date range."));
+    statusLine(d, cacheState, `<span>Zero Trust: <b>${active.length} of ${products.length}</b> products with activity</span>`);
+    const groups = [...new Set(d.sections.map((x) => x.group))];
+    // Products with activity first within each group; empty ones collapse to a compact list.
+    $("content").innerHTML = `
+      <div class="zhead"><a class="back" href="#" id="ztBack">← Back to usage</a><h2>Zero Trust</h2><span class="chip">Cloudflare One</span></div>
+      ${groups.map((g) => {
+        const all = d.sections.filter((x) => x.group === g);
+        const live = all.filter((x) => !x.notes.includes("No activity in this date range."));
+        const idle = all.filter((x) => x.notes.includes("No activity in this date range."));
+        return `<div class="group-title">${esc(g.replace(/^Zero Trust · /, ""))}</div>
+          ${live.length ? `<div class="grid">${live.map(card).join("")}</div>` : ""}
+          ${idle.length ? `<p class="muted" style="margin:${live.length ? "10px" : "0"} 0 0">No activity in this range: ${idle.map((x) => esc(x.title)).join(" · ")}</p>` : ""}`;
+      }).join("")}
+      <ul class="notes"><li>Daily rollups (Access, Gateway, Shadow IT, MCP) are exact and keep a year of history. WARP, Tunnel, Browser Isolation and other sampled datasets keep about a month.</li></ul>`;
+    $("ztBack").onclick = (e) => { e.preventDefault(); state.page = null; load(false, true); };
+  }
+
+  // ---- zone drill-down ----------------------------------------------------
+  const SERIES = {
+    good: { label: "Good requests", color: "var(--series-1)" },
+    threats: { label: "Threats", color: "var(--series-2)" },
+    bytes: { label: "Data transfer", color: "var(--series-1)" },
+    dns: { label: "DNS queries", color: "var(--series-1)" },
+  };
+
+  function renderZone(d, cacheState) {
+    const t = d.totals;
+    const pct = (a, b) => (b > 0 ? (a / b) * 100 : null);
+    statusLine(d, cacheState, `<span>Zone: <b>${esc(d.zone.name)}</b></span>`);
+    const decision = d.breakdowns.find((b) => b.id === "decision");
+    const human = decision && decision.rows.length
+      ? decision.rows.filter((r) => r.key === "likely_human" || r.key === "verified_bot").reduce((s, r) => s + (r.share || 0), 0)
+      : null;
+    const options = d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === d.zone.id ? " selected" : ""}>${esc(z.name)} — ${esc(z.plan)}</option>`).join("");
+    const dnsCodes = d.breakdowns.find((b) => b.id === "dnsCode");
+    const codeShare = (code) => (dnsCodes && dnsCodes.rows.length ? (dnsCodes.rows.find((r) => r.key === code)?.share ?? 0) : null);
+    const dnsPeak = d.daily.reduce((a, p) => (p.dnsQueries > a.dnsQueries ? p : a), d.daily[0] || { dnsQueries: 0, date: "" });
+    const peak = d.daily.reduce((a, p) => (p.requests > a.requests ? p : a), d.daily[0] || { requests: 0, date: "" });
+
+    const groupCards = (group) => d.breakdowns.filter((b) => b.group === group).map((b) => `
+      <section class="card">
+        <h3>${esc(b.title)}<span class="badge">${b.sampled ? "Sampled" : "Exact"}</span></h3>
+        ${b.note ? `<div class="sub">${esc(b.note)}</div>` : ""}
+        ${tableHtml(b)}
+      </section>`).join("");
+
+    $("content").innerHTML = `
+      <div class="zhead">
+        <a class="back" data-zone="" href="${esc(zoneHref(null))}">← All zones</a>
+        <h2>${esc(d.zone.name)}</h2><span class="chip">${esc(d.zone.plan)}</span>
+        <select id="zoneSwitch" aria-label="Switch zone">${options}</select>
+      </div>
+      ${errorsHtml(d.errors)}
+      <div class="kpi-groups">
+        <section class="card">
+          <h3>CDN requests &amp; data transfer</h3><div class="src">httpRequests1dGroups · exact</div>
+          <div class="kpis">${[
+            { label: "CDN requests", value: t.requests, unit: "count" },
+            { label: "CDN data transfer", value: t.bytes, unit: "bytes" },
+            { label: "Requests from cache", value: pct(t.cachedRequests, t.requests), unit: "percent" },
+            { label: "Bytes from cache", value: pct(t.cachedBytes, t.bytes), unit: "percent" },
+            { label: "Page views", value: t.pageViews, unit: "count" },
+            { label: "Busiest day", value: peak.requests ? fmtDay(peak.date) : null, unit: "text", hint: peak.requests ? `${fmt(peak.requests, "count")} requests` : "" },
+          ].map(kpiHtml).join("")}</div>
+        </section>
+        <section class="card">
+          <h3>Bot Management – good requests</h3><div class="src">requests − threats · exact; bot classes sampled</div>
+          <div class="kpis">${[
+            { label: "Good requests", value: t.good, unit: "count" },
+            { label: "Threats (blocked / challenged)", value: t.threats, unit: "count" },
+            { label: "Good share", value: pct(t.good, t.requests), unit: "percent" },
+            { label: "Human or verified bot", value: human, unit: "percent", hint: "Bot Management decision, sampled" },
+          ].map(kpiHtml).join("")}</div>
+        </section>
+        <section class="card">
+          <h3>DNS queries</h3><div class="src">dnsAnalyticsAdaptiveGroups · sampled</div>
+          <div class="kpis">${[
+            { label: "DNS queries", value: t.dnsQueries, unit: "count" },
+            { label: "Answered (NOERROR)", value: codeShare("NOERROR"), unit: "percent" },
+            { label: "Name not found (NXDOMAIN)", value: codeShare("NXDOMAIN"), unit: "percent" },
+            { label: "Daily average", value: d.daily.length ? t.dnsQueries / d.daily.length : null, unit: "count" },
+            { label: "Busiest day", value: dnsPeak.dnsQueries ? fmtDay(dnsPeak.date) : null, unit: "text", hint: dnsPeak.dnsQueries ? fmt(dnsPeak.dnsQueries, "count") + " queries" : "" },
+          ].map(kpiHtml).join("")}</div>
+        </section>
+      </div>
+
+      <div class="group-title">Daily trend</div>
+      <div class="grid">
+        <section class="card chart-card">
+          <h3>Requests per day</h3>
+          <div class="legend"><span><i style="background:${SERIES.good.color}"></i>${SERIES.good.label}</span><span><i style="background:${SERIES.threats.color}"></i>${SERIES.threats.label}</span></div>
+          <div class="chart" data-chart="requests"></div>
+        </section>
+        <section class="card chart-card">
+          <h3>Data transfer per day</h3>
+          <div class="sub">Hover a day for the cached share.</div>
+          <div class="chart" data-chart="bytes"></div>
+        </section>
+        <section class="card chart-card">
+          <h3>DNS queries per day</h3>
+          <div class="sub">Sampled. Hover a day to compare with HTTP requests.</div>
+          <div class="chart" data-chart="dns"></div>
+        </section>
+      </div>
+      <details style="margin-top:10px"><summary>Daily table</summary>${tableHtml({
+        columns: [
+          { key: "date", label: "Date" }, { key: "requests", label: "Requests", unit: "count" }, { key: "good", label: "Good", unit: "count" },
+          { key: "threats", label: "Threats", unit: "count" }, { key: "bytes", label: "Data transfer", unit: "bytes" },
+          { key: "cachedBytes", label: "Cached bytes", unit: "bytes" }, { key: "pageViews", label: "Page views", unit: "count" },
+          { key: "uniques", label: "Unique visitors", unit: "count" },
+          { key: "dnsQueries", label: "DNS queries", unit: "count" },
+        ],
+        rows: d.daily,
+      })}</details>
+
+      <div class="group-title">CDN breakdown</div>
+      <div class="grid">${groupCards("CDN")}</div>
+      <div class="group-title">Bot Management breakdown</div>
+      <div class="grid">${groupCards("Bot Management")}</div>
+      <div class="group-title">DNS breakdown</div>
+      <div class="grid">${groupCards("DNS")}</div>
+      <ul class="notes"><li>Exact tables come from Cloudflare's daily rollups. Sampled tables are estimates from visitor traffic and can differ slightly from the exact totals.</li></ul>
+    `;
+    drawCharts();
+  }
+
+  function drawCharts() {
+    const d = state.data;
+    if (state.view !== "zone" || !d) return;
+    document.querySelectorAll("[data-chart]").forEach((el) => {
+      if (el.dataset.chart === "requests") {
+        barChart(el, d.daily, [{ key: "good", ...SERIES.good }, { key: "threats", ...SERIES.threats }], "count",
+          (p) => [["Total", fmt(p.requests, "count")]]);
+      } else if (el.dataset.chart === "dns") {
+        barChart(el, d.daily, [{ key: "dnsQueries", ...SERIES.dns }], "count",
+          (p) => [["HTTP requests", fmt(p.requests, "count")]]);
+      } else {
+        barChart(el, d.daily, [{ key: "bytes", ...SERIES.bytes }], "bytes",
+          (p) => [["From cache", fmt(p.cachedBytes, "bytes")], ["Requests", fmt(p.requests, "count")]]);
+      }
+    });
+  }
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawCharts, 150); });
+
+  const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  function niceMax(v) {
+    const p = 10 ** Math.floor(Math.log10(v));
+    for (const s of [1, 2, 2.5, 5, 10]) if (s * p >= v) return s * p;
+    return 10 * p;
+  }
+  function roundTop(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+
+  /** Stacked daily bars with a per-day hover tooltip. Series stack bottom-up in the given order. */
+  function barChart(el, days, series, unit, extraRows) {
+    const W = Math.max(280, el.clientWidth), H = 220, m = { l: 56, r: 6, t: 8, b: 24 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b, n = Math.max(1, days.length);
+    const totals = days.map((p) => series.reduce((s, x) => s + (p[x.key] || 0), 0));
+    const max = niceMax(Math.max(1, ...totals));
+    const y = (v) => m.t + ph - (v / max) * ph;
+    const band = pw / n, bw = Math.max(1, Math.min(26, band * 0.72));
+    const axisFmt = (v) => (unit === "bytes" ? fmtBytes(v) : compact.format(v));
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(series.map((x) => x.label).join(" and "))} per day">`;
+    s += `<g class="axis">`;
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      const v = f * max, yy = y(v);
+      s += `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}"/><text x="${m.l - 8}" y="${yy + 4}" text-anchor="end">${esc(axisFmt(v))}</text>`;
+    }
+    const every = Math.max(1, Math.ceil(n / (W < 520 ? 4 : 7)));
+    days.forEach((p, i) => {
+      if (i % every === 0) {
+        const label = new Date(p.date + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+        s += `<text x="${m.l + i * band + band / 2}" y="${H - 6}" text-anchor="middle">${esc(label)}</text>`;
+      }
+    });
+    s += `</g><g class="bands">`;
+    days.forEach((_, i) => { s += `<rect class="band" data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${ph}"/>`; });
+    s += `</g><g class="bars">`;
+    days.forEach((p, i) => {
+      const x = m.l + i * band + (band - bw) / 2;
+      const segs = series.map((x2) => ({ ...x2, v: p[x2.key] || 0 })).filter((g) => g.v > 0);
+      let base = 0;
+      segs.forEach((g, j) => {
+        const y0 = y(base), y1 = y(base + g.v);
+        base += g.v;
+        const h = y0 - y1 - (j > 0 ? 2 : 0); // 2px surface gap between stacked segments
+        if (h <= 0.3) return;
+        s += j === segs.length - 1
+          ? `<path d="${roundTop(x, y1, bw, h, 4)}" fill="${g.color}"/>`
+          : `<rect x="${x}" y="${y1}" width="${bw}" height="${h}" fill="${g.color}"/>`;
+      });
+    });
+    s += `</g></svg><div class="tip"></div>`;
+    el.innerHTML = s;
+
+    const svg = el.querySelector("svg"), tip = el.querySelector(".tip");
+    let on = null;
+    const hide = () => { tip.style.display = "none"; if (on) on.classList.remove("on"); on = null; };
+    svg.addEventListener("pointermove", (e) => {
+      const r = svg.getBoundingClientRect();
+      const sx = ((e.clientX - r.left) / r.width) * W;
+      const i = Math.floor((sx - m.l) / band);
+      if (i < 0 || i >= days.length) return hide();
+      const p = days[i];
+      const rect = svg.querySelector(`.band[data-i="${i}"]`);
+      if (on !== rect) { if (on) on.classList.remove("on"); rect.classList.add("on"); on = rect; }
+      tip.innerHTML = `<b>${esc(fmtDay(p.date))}</b>` +
+        series.map((x) => `<div class="r"><span><i style="background:${x.color}"></i>${esc(x.label)}</span><span>${esc(fmt(p[x.key], unit))}</span></div>`).join("") +
+        extraRows(p).map(([k, v]) => `<div class="r"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+      tip.style.display = "block";
+      const er = el.getBoundingClientRect();
+      let left = e.clientX - er.left + 14;
+      if (left + tip.offsetWidth > er.width) left = e.clientX - er.left - tip.offsetWidth - 14;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = Math.max(0, e.clientY - er.top - tip.offsetHeight - 10) + "px";
+    });
+    svg.addEventListener("pointerleave", hide);
+  }
+
+  // ---- CSV export ---------------------------------------------------------
+  function downloadCsv() {
+    const d = state.data;
+    if (!d) return;
+    const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [["section", "table", "row", "metric", "value", "unit"].map(q).join(",")];
+    const tableRows = (section, t) => {
+      const label = t.columns[0];
+      for (const r of t.rows) for (const c of t.columns.slice(1)) {
+        lines.push([section, t.title, r[label.key], c.label, r[c.key] ?? "", c.unit ?? ""].map(q).join(","));
+      }
+    };
+    let name;
+    if (state.view === "zone") {
+      name = `cloudflare-zone_${d.zone.name}_${d.range.from}_${d.range.to}.csv`;
+      for (const [k, v] of Object.entries(d.totals)) lines.push([d.zone.name, "Totals", "", k, v, ""].map(q).join(","));
+      for (const p of d.daily) for (const [k, v] of Object.entries(p)) if (k !== "date") lines.push([d.zone.name, "Daily", p.date, k, v, ""].map(q).join(","));
+      for (const b of d.breakdowns) tableRows(d.zone.name, b);
+    } else {
+      name = `cloudflare-${state.view === "zt" ? "zerotrust" : "usage"}_${d.range.from}_${d.range.to}.csv`;
+      for (const s of d.sections) {
+        for (const m of s.metrics) lines.push([s.title, "", "", m.label, m.value ?? "", m.unit].map(q).join(","));
+        for (const t of s.tables) tableRows(s.title, t);
+      }
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  load(false, false);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "cf-usage-dashboard",
+  "version": "1.0.0",
+  "description": "Self-hosted Cloudflare usage dashboard on Workers: CDN, Bot Management, DNS, Spectrum, Images and developer platform usage from the GraphQL Analytics API, with monthly caps and webhook / ntfy alerts.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamjjchang/cloudflare-usage-dashboard.git"
+  },
+  "keywords": [
+    "cloudflare",
+    "cloudflare-workers",
+    "graphql-analytics",
+    "usage",
+    "billing",
+    "dashboard",
+    "alerts"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "check": "wrangler types && tsc --noEmit"
+  },
+  "cloudflare": {
+    "bindings": {
+      "CF_API_TOKEN": {
+        "description": "Cloudflare API token for reading analytics. Permissions: Account Analytics Read, Zone Analytics Read and Zone Read (all zones). Optional: Zone Settings Read for Spectrum IPv4 counts."
+      },
+      "DASHBOARD_PASSWORD": {
+        "description": "Password for the dashboard (HTTP Basic auth, any username). Use a long random string."
+      },
+      "ACCOUNT_ID": {
+        "description": "Optional. Leave empty to use the account the API token belongs to; set it if the token can see several accounts."
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.0"
+  }
+}
